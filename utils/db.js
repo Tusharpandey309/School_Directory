@@ -1,31 +1,12 @@
 // utils/db.js
 import mysql from 'mysql2/promise';
 
-let connection = null;
+let pool = null;
 
 export async function getConnection() {
-  if (connection) {
-    return connection;
-  }
-
-  try {
-    connection = await mysql.createConnection({
-      host: process.env.DB_HOST,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME,
-      port: process.env.DB_PORT,
-    });
-
-    console.log('Database connected successfully');
-    return connection;
-  } catch (error) {
-    console.error('Database connection failed:', error);
-    throw error;
-  }
+  // Use connection pool for both functions for consistency
+  return await getConnectionPool();
 }
-
-let pool = null;
 
 export async function getConnectionPool() {
   if (pool) {
@@ -38,15 +19,31 @@ export async function getConnectionPool() {
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME,
-      port: process.env.DB_PORT,
+      port: process.env.DB_PORT || 3306,
       waitForConnections: true,
       connectionLimit: 10,
-      queueLimit: 0
+      queueLimit: 0,
+      // Add SSL for production databases (Railway, PlanetScale)
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      acquireTimeout: 60000,
+      timeout: 60000,
+      // Handle connection errors
+      reconnect: true,
+      idleTimeout: 300000,
     });
 
+    console.log('Database pool created successfully');
     return pool;
   } catch (error) {
     console.error('Database pool creation failed:', error);
     throw error;
+  }
+}
+
+// Close connection pool gracefully
+export async function closeConnection() {
+  if (pool) {
+    await pool.end();
+    pool = null;
   }
 }
