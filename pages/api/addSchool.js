@@ -16,6 +16,28 @@ export const config = {
   api: { bodyParser: false }
 };
 
+// Validation helper functions
+function isValidEmail(email) {
+  const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+  return emailRegex.test(email);
+}
+
+function isValidContact(contact) {
+  // Allows numbers, spaces, hyphens, parentheses, and + sign, minimum 10 digits
+  const contactRegex = /^[0-9+\-\s()]{10,}$/;
+  const digitCount = contact.replace(/[^0-9]/g, '').length;
+  return contactRegex.test(contact) && digitCount >= 10;
+}
+
+function isValidName(name) {
+  return typeof name === 'string' && name.trim().length >= 2;
+}
+
+function isValidImageFormat(mimeType) {
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  return allowedTypes.includes(mimeType);
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: `Method '${req.method}' Not Allowed` });
@@ -31,8 +53,15 @@ export default async function handler(req, res) {
     const [fields, files] = await form.parse(req);
     const imageFile = Array.isArray(files.image) ? files.image[0] : files.image;
     
+    // Image validation
     if (!imageFile) {
       return res.status(400).json({ error: 'Image is required' });
+    }
+
+    if (!isValidImageFormat(imageFile.mimetype)) {
+      return res.status(400).json({ 
+        error: 'Invalid image format. Only JPEG, PNG, GIF, and WebP are allowed' 
+      });
     }
 
     let imageName;
@@ -83,16 +112,56 @@ export default async function handler(req, res) {
     const contact = Array.isArray(fields.contact) ? fields.contact[0] : fields.contact;
     const email_id = Array.isArray(fields.email_id) ? fields.email_id[0] : fields.email_id;
 
-    // Validate required fields
+    // Basic required fields validation
     if (!name || !address || !city || !state || !contact || !email_id) {
       return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    // Name validation (minimum 2 characters)
+    if (!isValidName(name)) {
+      return res.status(400).json({ 
+        error: 'School name must be at least 2 characters long' 
+      });
+    }
+
+    // Email validation
+    if (!isValidEmail(email_id)) {
+      return res.status(400).json({ 
+        error: 'Please provide a valid email address' 
+      });
+    }
+
+    // Contact number validation
+    if (!isValidContact(contact)) {
+      return res.status(400).json({ 
+        error: 'Please provide a valid contact number (minimum 10 digits)' 
+      });
+    }
+
+    // Additional basic validations
+    if (address.trim().length < 5) {
+      return res.status(400).json({ 
+        error: 'Address must be at least 5 characters long' 
+      });
+    }
+
+    if (city.trim().length < 2) {
+      return res.status(400).json({ 
+        error: 'City name must be at least 2 characters long' 
+      });
+    }
+
+    if (state.trim().length < 2) {
+      return res.status(400).json({ 
+        error: 'State name must be at least 2 characters long' 
+      });
     }
 
     // Save to database
     const pool = await getConnectionPool();
     const [result] = await pool.execute(
       'INSERT INTO schools (name, address, city, state, contact, image, email_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [name, address, city, state, contact, imagePath, email_id] // Store full path/URL
+      [name, address, city, state, contact, imagePath, email_id]
     );
     
     res.status(200).json({ 
